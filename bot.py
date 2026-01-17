@@ -20,10 +20,8 @@ voice_connections: dict[int, discord.VoiceClient] = {}
 
 intents = discord.Intents.default()
 intents.guilds = True
-intents.members = True
 intents.voice_states = True
-# Якщо будеш робити команди через чат (!...), можна увімкнути:
-intents.message_content = True
+# intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -228,4 +226,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
