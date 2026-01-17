@@ -221,10 +221,11 @@ async def on_voice_state_update(
 
 
 def main():
-    if not TOKEN or MONITORED_ROLE_ID == 0 or VOICE_CHANNEL_ID == 0:
-        raise RuntimeError("Set DISCORD_TOKEN, MONITORED_ROLE_ID, and VOICE_CHANNEL_ID in .env")
+    if not TOKEN or MONITORED_ROLE_ID == 0:
+        raise RuntimeError("Set DISCORD_TOKEN and MONITORED_ROLE_ID in .env")
     bot.run(TOKEN)
 
 
 if __name__ == "__main__":
     main()
+
