@@ -13,13 +13,17 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 MONITORED_ROLE_ID = int(os.getenv("MONITORED_ROLE_ID", "0"))
+VOICE_CHANNEL_ID = int(os.getenv("VOICE_CHANNEL_ID", "0"))
+
+# For voice channel idle feature
+voice_connections: dict[int, discord.VoiceClient] = {}
 
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True
 intents.voice_states = True
 # Якщо будеш робити команди через чат (!...), можна увімкнути:
-# intents.message_content = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -29,6 +33,47 @@ pending_unmutes: dict[int, asyncio.Task] = {}
 
 def has_role(member: discord.Member, role_id: int) -> bool:
     return any(r.id == role_id for r in member.roles)
+
+
+@bot.command(name="join-channel")
+async def join_voice(ctx: commands.Context, channel_id: int):
+    """Join a voice channel by ID. Usage: !join-channel <channel_id>"""
+    channel = bot.get_channel(channel_id)
+    
+    if channel is None:
+        await ctx.send(f"Channel with ID {channel_id} not found!")
+        return
+    
+    if not isinstance(channel, discord.VoiceChannel):
+        await ctx.send(f"Channel {channel_id} is not a voice channel!")
+        return
+    
+    guild_id = ctx.guild.id
+    
+    # Disconnect from existing connection if any
+    if guild_id in voice_connections:
+        await voice_connections[guild_id].disconnect()
+    
+    try:
+        vc = await channel.connect()
+        voice_connections[guild_id] = vc
+        await ctx.send(f"Joined {channel.name}!")
+    except Exception as e:
+        await ctx.send(f"Failed to join channel: {e}")
+
+
+@bot.command(name="leave-channel")
+async def leave_voice(ctx: commands.Context):
+    """Leave the current voice channel."""
+    guild_id = ctx.guild.id
+    
+    if guild_id not in voice_connections or voice_connections[guild_id] is None:
+        await ctx.send("I'm not in a voice channel!")
+        return
+    
+    await voice_connections[guild_id].disconnect()
+    voice_connections.pop(guild_id, None)
+    await ctx.send("Left the voice channel!")
 
 
 async def find_recent_mute_actor(
@@ -68,6 +113,24 @@ async def find_recent_mute_actor(
 async def on_ready():
     print(f"Logged in as {bot.user} (id={bot.user.id})")
     print(f"Monitored role id: {MONITORED_ROLE_ID}")
+    
+    # Auto-join the specific voice channel
+    if VOICE_CHANNEL_ID != 0:
+        channel = bot.get_channel(VOICE_CHANNEL_ID)
+        if channel and isinstance(channel, discord.VoiceChannel):
+            try:
+                for guild_id, vc in list(voice_connections.items()):
+                    if vc and not vc.is_closed():
+                        await vc.disconnect()
+                        voice_connections.pop(guild_id, None)
+                
+                vc = await channel.connect()
+                voice_connections[channel.guild.id] = vc
+                print(f"[BOT] Joined voice channel: {channel.name}")
+            except Exception as e:
+                print(f"[BOT] Failed to join voice channel: {e}")
+        else:
+            print(f"[BOT] Voice channel {VOICE_CHANNEL_ID} not found or is not a voice channel")
 
 
 @bot.event
@@ -158,8 +221,8 @@ async def on_voice_state_update(
 
 
 def main():
-    if not TOKEN or MONITORED_ROLE_ID == 0:
-        raise RuntimeError("Set DISCORD_TOKEN and MONITORED_ROLE_ID in .env")
+    if not TOKEN or MONITORED_ROLE_ID == 0 or VOICE_CHANNEL_ID == 0:
+        raise RuntimeError("Set DISCORD_TOKEN, MONITORED_ROLE_ID, and VOICE_CHANNEL_ID in .env")
     bot.run(TOKEN)
 
 
