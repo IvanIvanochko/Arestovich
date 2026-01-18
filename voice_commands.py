@@ -2,12 +2,19 @@ import discord
 from discord.ext import commands
 from pathlib import Path
 
+from ffmpeg_helper import get_ffmpeg_exec
+
 
 voice_connections: dict[int, discord.VoiceClient] = {}
 
 # Default audio directory and file
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_JOIN_AUDIO = BASE_DIR / "Molda Voice" / "New_comers_molda.mp3"
+
+# Resolve ffmpeg executable once at import
+FFMPEG_EXEC = get_ffmpeg_exec()
+if not FFMPEG_EXEC:
+    print("[FFMPEG] ffmpeg executable not found. Set FFMPEG_PATH env var or ensure ffmpeg is available.")
 
 
 async def join_voice(ctx: commands.Context, bot: commands.Bot, channel_id: int):
@@ -73,7 +80,10 @@ async def play_join(ctx: commands.Context, filename: str | None = None):
     try:
         if vc.is_playing():
             vc.stop()
-        source = discord.FFmpegPCMAudio(str(file_path))
+        if FFMPEG_EXEC is None:
+            await ctx.send("ffmpeg not available on the server. Set FFMPEG_PATH or install ffmpeg.")
+            return
+        source = discord.FFmpegPCMAudio(str(file_path), executable=FFMPEG_EXEC)
         vc.play(source)
         await ctx.send(f"Playing {file_path.name}")
     except Exception as e:
