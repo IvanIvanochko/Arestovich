@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 from pathlib import Path
 
-from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID
+from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID, JOIN_PLAY_DELAY
 from utils import has_role, find_recent_mute_actor
 from voice_commands import voice_connections
 from ffmpeg_helper import get_ffmpeg_exec
@@ -71,6 +71,19 @@ async def on_voice_state_update(
             vc = voice_connections.get(guild_id)
             # Check active connection by channel presence
             if vc and getattr(vc, "channel", None) is not None and vc.channel.id == after.channel.id:
+                # Wait a short configurable delay to allow the user to fully connect
+                try:
+                    await asyncio.sleep(JOIN_PLAY_DELAY)
+                except Exception:
+                    pass
+                # Re-fetch member from guild and verify they're still in the same channel
+                current_member = guild.get_member(member.id)
+                if current_member is None or current_member.voice is None or current_member.voice.channel is None:
+                    print(f"[AUDIO] Member {member} left or not fully connected after delay; skipping playback.")
+                    return
+                if current_member.voice.channel.id != after.channel.id:
+                    print(f"[AUDIO] Member {member} moved channels after delay; skipping playback.")
+                    return
                 if JOIN_AUDIO.exists():
                     try:
                         # stop current audio if playing
