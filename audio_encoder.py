@@ -28,7 +28,7 @@ async def encode_mp3_to_opus(
         ffmpeg_exec or "ffmpeg",
         "-i", str(mp3_file),
         "-c:a", "libopus",
-        "-b:a", "128k",
+        "-b:a", "64k",  # Lower bitrate to save memory
         "-y",
         str(opus_file)
     ]
@@ -70,6 +70,11 @@ async def encode_all_mp3s(ffmpeg_exec: Optional[str] = None) -> None:
 
     print(f"[OPUS] Found {len(mp3_files)} MP3 files. Starting encoding...")
     for mp3_file in mp3_files:
-        await encode_mp3_to_opus(mp3_file, ffmpeg_exec=ffmpeg_exec)
+        try:
+            await encode_mp3_to_opus(mp3_file, ffmpeg_exec=ffmpeg_exec)
+        except Exception as e:
+            print(f"[OPUS] Skipped encoding for {mp3_file.name}: {e}")
+            # Continue encoding other files even if one fails
+            continue
 
-    print("[OPUS] Encoding complete")
+    print("[OPUS] Encoding complete (failures may be acceptable; playback will fall back to MP3)")
