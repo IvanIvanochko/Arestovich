@@ -8,6 +8,8 @@ from config import TOKEN, MONITORED_ROLE_ID
 from voice_commands import join_voice, leave_voice, play_join
 import events
 from greetings import register_greeting_commands
+from audio_encoder import encode_all_mp3s
+from ffmpeg_helper import get_ffmpeg_exec
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -37,12 +39,26 @@ async def leave_channel_cmd(ctx: commands.Context):
 @bot.command(name="play-join")
 @commands.has_permissions(administrator=True)
 async def play_join_cmd(ctx: commands.Context, filename: str = None):
-    """Play the configured join audio (admin only). Optionally specify filename in `Molda Voice/`."""
+    """Play the configured join audio (admin only). Optionally specify filename in `Molda Voice/`.""" 
     await play_join(ctx, filename)
+
+
+@bot.command(name="encode-audio")
+@commands.has_permissions(administrator=True)
+async def encode_audio_cmd(ctx: commands.Context):
+    """Pre-encode all MP3 files to Opus format for lower memory usage (admin only)."""
+    await ctx.send("Starting audio encoding... (this may take a while)")
+    ffmpeg_exec = get_ffmpeg_exec()
+    await encode_all_mp3s(ffmpeg_exec=ffmpeg_exec)
+    await ctx.send("Audio encoding complete!")
 
 
 @bot.event
 async def on_ready():
+    # Pre-encode MP3s to Opus on startup for lower memory usage
+    print("[BOT] Pre-encoding audio files to Opus...")
+    ffmpeg_exec = get_ffmpeg_exec()
+    await encode_all_mp3s(ffmpeg_exec=ffmpeg_exec)
     await events.on_ready(bot)
 
 
