@@ -17,12 +17,14 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 @bot.command(name="join-channel")
+@commands.has_permissions(administrator=True)
 async def join_channel_cmd(ctx: commands.Context, channel_id: int):
     """Join a voice channel by ID. Usage: !join-channel <channel_id>"""
     await join_voice(ctx, bot, channel_id)
 
 
 @bot.command(name="leave-channel")
+@commands.has_permissions(administrator=True)
 async def leave_channel_cmd(ctx: commands.Context):
     """Leave the current voice channel."""
     await leave_voice(ctx)
@@ -50,6 +52,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
