@@ -8,6 +8,7 @@ from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID, JOIN_PLAY_DELAY
 from utils import has_role, find_recent_mute_actor
 from voice_commands import voice_connections
 from ffmpeg_helper import get_ffmpeg_exec
+from greetings import get_greeting_for_member
 
 # Resolve ffmpeg executable for event playback
 FFMPEG_EXEC = get_ffmpeg_exec()
@@ -87,7 +88,14 @@ async def on_voice_state_update(
                 if current_member.voice.channel.id != after.channel.id:
                     print(f"[AUDIO] Member {member} moved channels after delay; skipping playback.")
                     return
-                if JOIN_AUDIO.exists():
+                # If a specific greeting token exists for this member, use it
+                greeting_filename = get_greeting_for_member(member.id)
+                if greeting_filename:
+                    audio_path = Path(__file__).resolve().parent / "Molda Voice" / greeting_filename
+                else:
+                    audio_path = JOIN_AUDIO
+
+                if audio_path.exists():
                     try:
                         # stop current audio if playing
                         if vc.is_playing():
@@ -96,7 +104,7 @@ async def on_voice_state_update(
                             print("[AUDIO] ffmpeg not available; cannot play audio.")
                         else:
                             try:
-                                source = await discord.FFmpegOpusAudio.from_probe(str(JOIN_AUDIO), executable=FFMPEG_EXEC)
+                                source = await discord.FFmpegOpusAudio.from_probe(str(audio_path), executable=FFMPEG_EXEC)
                                 vc.play(source)
                             except Exception as e:
                                 print("[AUDIO] Failed to play join audio (Opus probe):", e)
@@ -104,7 +112,7 @@ async def on_voice_state_update(
                     except Exception as e:
                         print("[AUDIO] Failed to play join audio:", e)
                 else:
-                    print("[AUDIO] Join audio file not present; skipping playback.")
+                    print(f"[AUDIO] Audio file not present; skipping playback. ({audio_path})")
     except Exception as e:
         print("[AUDIO] Error during join-audio handling:", e)
 

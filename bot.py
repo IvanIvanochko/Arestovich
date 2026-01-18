@@ -7,6 +7,7 @@ from discord.ext import commands
 from config import TOKEN, MONITORED_ROLE_ID
 from voice_commands import join_voice, leave_voice, play_join
 import events
+from greetings import register_greeting_commands
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -14,6 +15,9 @@ intents.voice_states = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Register dynamic greeting commands (from `Molda Voice` files)
+register_greeting_commands(bot)
 
 
 @bot.command(name="join-channel")
