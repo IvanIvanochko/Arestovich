@@ -1,10 +1,10 @@
 import asyncio
 import os
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from pathlib import Path
 
-from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID, JOIN_PLAY_DELAY
+from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID, JOIN_PLAY_DELAY, MOLDA_CHANNEL_ID, MOLDA_REJOIN_INTERVAL
 from utils import has_role, find_recent_mute_actor
 from voice_commands import voice_connections
 from ffmpeg_helper import get_ffmpeg_exec
@@ -23,6 +23,12 @@ if not JOIN_AUDIO.exists():
 
 # Щоб не запускати кілька таймерів на одну людину
 pending_unmutes: dict[int, asyncio.Task] = {}
+
+# Molda channel auto-rejoin state tracking
+# Maps guild_id to the target molda channel_id (0 means auto-rejoin disabled)
+molda_rejoin_targets: dict[int, int] = {}
+# Maps guild_id to the hourly rejoin task
+molda_rejoin_tasks: dict[int, asyncio.Task] = {}
 
 
 async def on_ready(bot: commands.Bot):
@@ -47,6 +53,78 @@ async def on_ready(bot: commands.Bot):
                 print(f"[BOT] Failed to join voice channel: {e}")
         else:
             print(f"[BOT] Voice channel {VOICE_CHANNEL_ID} not found or is not a voice channel")
+    
+    # Auto-join molda channel if configured
+    if MOLDA_CHANNEL_ID != 0:
+        channel = bot.get_channel(MOLDA_CHANNEL_ID)
+        if channel and isinstance(channel, discord.VoiceChannel):
+            try:
+                guild_id = channel.guild.id
+                
+                # Disconnect from any existing connection in this guild
+                if guild_id in voice_connections and voice_connections[guild_id]:
+                    await voice_connections[guild_id].disconnect()
+                    voice_connections.pop(guild_id, None)
+                
+                vc = await channel.connect()
+                voice_connections[guild_id] = vc
+                molda_rejoin_targets[guild_id] = MOLDA_CHANNEL_ID
+                print(f"[BOT] Joined molda voice channel: {channel.name}")
+                
+                # Start hourly rejoin task if not already running
+                if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
+                    molda_rejoin_tasks[guild_id] = asyncio.create_task(
+                        _molda_hourly_rejoin_loop(bot, guild_id, MOLDA_CHANNEL_ID)
+                    )
+                    
+            except Exception as e:
+                print(f"[BOT] Failed to join molda voice channel: {e}")
+        else:
+            print(f"[BOT] Molda voice channel {MOLDA_CHANNEL_ID} not found or is not a voice channel")
+
+
+async def _molda_hourly_rejoin_loop(bot: commands.Bot, guild_id: int, channel_id: int):
+    """Rejoin the molda channel every hour."""
+    while True:
+        try:
+            await asyncio.sleep(MOLDA_REJOIN_INTERVAL)
+            
+            # Check if auto-rejoin is still enabled for this guild
+            if molda_rejoin_targets.get(guild_id) != channel_id:
+                print(f"[MOLDA] Auto-rejoin disabled for guild {guild_id}")
+                break
+            
+            channel = bot.get_channel(channel_id)
+            if not channel or not isinstance(channel, discord.VoiceChannel):
+                print(f"[MOLDA] Channel {channel_id} not found or not a voice channel")
+                break
+            
+            vc = voice_connections.get(guild_id)
+            if not vc or getattr(vc, "channel", None) is None:
+                # Bot is not in a channel, try to rejoin
+                try:
+                    vc = await channel.connect()
+                    voice_connections[guild_id] = vc
+                    print(f"[MOLDA] Rejoined channel after 1 hour: {channel.name}")
+                except Exception as e:
+                    print(f"[MOLDA] Failed to rejoin after 1 hour: {e}")
+            else:
+                # Bot is in a channel, verify it's the correct one
+                if vc.channel.id != channel_id:
+                    # Bot is in wrong channel, move back
+                    try:
+                        await vc.move_to(channel)
+                        print(f"[MOLDA] Moved back to molda channel: {channel.name}")
+                    except Exception as e:
+                        print(f"[MOLDA] Failed to move back to molda channel: {e}")
+                else:
+                    print(f"[MOLDA] Still in correct molda channel, nothing to do")
+                    
+        except asyncio.CancelledError:
+            print(f"[MOLDA] Rejoin loop for guild {guild_id} cancelled")
+            break
+        except Exception as e:
+            print(f"[MOLDA] Error in hourly rejoin loop: {e}")
 
 
 async def on_voice_state_update(
@@ -66,6 +144,36 @@ async def on_voice_state_update(
 
     # Guild reference (used by join-audio logic and audit checks)
     guild = member.guild
+    guild_id = guild.id
+    
+    # Handle bot disconnect/move detection for molda channel auto-rejoin
+    if member.bot and member.id == guild.me.id:
+        target_molda_id = molda_rejoin_targets.get(guild_id)
+        if target_molda_id:
+            # Bot was disconnected from molda channel
+            if before.channel and before.channel.id == target_molda_id and after.channel is None:
+                print(f"[MOLDA] Bot disconnected from molda channel, rejoining...")
+                try:
+                    channel = guild.get_channel(target_molda_id)
+                    if channel and isinstance(channel, discord.VoiceChannel):
+                        vc = await channel.connect()
+                        voice_connections[guild_id] = vc
+                        print(f"[MOLDA] Rejoined molda channel after disconnect: {channel.name}")
+                except Exception as e:
+                    print(f"[MOLDA] Failed to rejoin after disconnect: {e}")
+            
+            # Bot was moved to a different channel
+            elif before.channel and after.channel and before.channel.id == target_molda_id and after.channel.id != target_molda_id:
+                print(f"[MOLDA] Bot moved away from molda channel, moving back...")
+                try:
+                    channel = guild.get_channel(target_molda_id)
+                    if channel and isinstance(channel, discord.VoiceChannel):
+                        vc = voice_connections.get(guild_id)
+                        if vc:
+                            await vc.move_to(channel)
+                            print(f"[MOLDA] Moved back to molda channel: {channel.name}")
+                except Exception as e:
+                    print(f"[MOLDA] Failed to move back to molda channel: {e}")
 
     # Play join audio when a non-bot user enters a channel where the bot is connected
     try:
