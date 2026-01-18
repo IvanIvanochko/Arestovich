@@ -54,11 +54,20 @@ async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int):
         await ctx.send(f"Channel {channel_id} is not a voice channel!")
         return
     
+    # Check bot permissions
+    perms = channel.permissions_for(channel.guild.me)
+    if not perms.connect:
+        await ctx.send(f"Bot lacks CONNECT permission for {channel.name}!")
+        return
+    
     guild_id = ctx.guild.id
     
     # Disconnect from existing connection if any
     if guild_id in voice_connections and voice_connections[guild_id]:
-        await voice_connections[guild_id].disconnect()
+        try:
+            await voice_connections[guild_id].disconnect()
+        except Exception as e:
+            print(f"[ERROR] Failed to disconnect: {e}")
     
     try:
         vc = await channel.connect()
@@ -74,8 +83,16 @@ async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int):
             )
         
         await ctx.send(f"Joined {channel.name} with auto-rejoin enabled!")
+    except asyncio.TimeoutError:
+        await ctx.send(f"Timeout connecting to {channel.name} - server may be overloaded")
+    except IndexError:
+        await ctx.send(f"Voice connection failed (encryption handshake issue). Try again or check channel permissions.")
+    except discord.Forbidden:
+        await ctx.send(f"Bot lacks permissions to join {channel.name}!")
+    except discord.HTTPException as e:
+        await ctx.send(f"Connection error: {e}")
     except Exception as e:
-        await ctx.send(f"Failed to join channel: {e}")
+        await ctx.send(f"Failed to join channel: {type(e).__name__}: {e}")
 
 
 @bot.command(name="leave-channel-molda")
