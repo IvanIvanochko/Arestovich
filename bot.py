@@ -7,6 +7,7 @@ from discord.ext import commands
 from config import TOKEN, MONITORED_ROLE_ID
 from voice_commands import join_voice, leave_voice, play_join
 import events
+from events import molda_rejoin_targets, molda_rejoin_tasks
 from greetings import register_greeting_commands
 from audio_encoder import encode_all_mp3s
 from ffmpeg_helper import get_ffmpeg_exec
@@ -34,6 +35,78 @@ async def join_channel_cmd(ctx: commands.Context, channel_id: int):
 async def leave_channel_cmd(ctx: commands.Context):
     """Leave the current voice channel."""
     await leave_voice(ctx)
+
+
+@bot.command(name="join-channel-molda")
+@commands.has_permissions(administrator=True)
+async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int):
+    """Join the molda voice channel with auto-rejoin enabled. Usage: !join-channel-molda <channel_id>"""
+    from voice_commands import voice_connections
+    import asyncio
+    
+    channel = bot.get_channel(channel_id)
+    
+    if channel is None:
+        await ctx.send(f"Channel with ID {channel_id} not found!")
+        return
+    
+    if not isinstance(channel, discord.VoiceChannel):
+        await ctx.send(f"Channel {channel_id} is not a voice channel!")
+        return
+    
+    guild_id = ctx.guild.id
+    
+    # Disconnect from existing connection if any
+    if guild_id in voice_connections and voice_connections[guild_id]:
+        await voice_connections[guild_id].disconnect()
+    
+    try:
+        vc = await channel.connect()
+        voice_connections[guild_id] = vc
+        
+        # Enable auto-rejoin for this molda channel
+        molda_rejoin_targets[guild_id] = channel_id
+        
+        # Start hourly rejoin task if not already running
+        if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
+            molda_rejoin_tasks[guild_id] = asyncio.create_task(
+                events._molda_hourly_rejoin_loop(bot, guild_id, channel_id)
+            )
+        
+        await ctx.send(f"Joined {channel.name} with auto-rejoin enabled!")
+    except Exception as e:
+        await ctx.send(f"Failed to join channel: {e}")
+
+
+@bot.command(name="leave-channel-molda")
+@commands.has_permissions(administrator=True)
+async def leave_channel_molda_cmd(ctx: commands.Context):
+    """Leave the molda voice channel and disable auto-rejoin."""
+    from voice_commands import voice_connections
+    
+    guild_id = ctx.guild.id
+    
+    # Cancel auto-rejoin task if running
+    if guild_id in molda_rejoin_tasks:
+        task = molda_rejoin_tasks[guild_id]
+        if not task.done():
+            task.cancel()
+        del molda_rejoin_tasks[guild_id]
+    
+    # Disable auto-rejoin
+    molda_rejoin_targets.pop(guild_id, None)
+    
+    # Disconnect from voice
+    if guild_id not in voice_connections or voice_connections[guild_id] is None:
+        await ctx.send("I'm not in a voice channel!")
+        return
+    
+    try:
+        await voice_connections[guild_id].disconnect()
+        voice_connections.pop(guild_id, None)
+        await ctx.send("Left the voice channel and disabled auto-rejoin!")
+    except Exception as e:
+        await ctx.send(f"Failed to leave channel: {e}")
 
 
 @bot.command(name="play-join")
