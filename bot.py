@@ -41,9 +41,6 @@ async def leave_channel_cmd(ctx: commands.Context):
 @commands.has_permissions(administrator=True)
 async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int):
     """Join the molda voice channel with auto-rejoin enabled. Usage: !join-channel-molda <channel_id>"""
-    from voice_commands import voice_connections
-    import asyncio
-    
     channel = bot.get_channel(channel_id)
     
     if channel is None:
@@ -60,39 +57,14 @@ async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int):
         await ctx.send(f"Bot lacks CONNECT permission for {channel.name}!")
         return
     
-    guild_id = ctx.guild.id
-    
-    # Disconnect from existing connection if any
-    if guild_id in voice_connections and voice_connections[guild_id]:
-        try:
-            await voice_connections[guild_id].disconnect()
-        except Exception as e:
-            print(f"[ERROR] Failed to disconnect: {e}")
-    
     try:
-        vc = await channel.connect()
-        voice_connections[guild_id] = vc
-        
-        # Enable auto-rejoin for this molda channel
-        molda_rejoin_targets[guild_id] = channel_id
-        
-        # Start hourly rejoin task if not already running
-        if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
-            molda_rejoin_tasks[guild_id] = asyncio.create_task(
-                events._molda_hourly_rejoin_loop(bot, guild_id, channel_id)
-            )
-        
-        await ctx.send(f"Joined {channel.name} with auto-rejoin enabled!")
-    except asyncio.TimeoutError:
-        await ctx.send(f"Timeout connecting to {channel.name} - server may be overloaded")
-    except IndexError:
-        await ctx.send(f"Voice connection failed (encryption handshake issue). Try again or check channel permissions.")
-    except discord.Forbidden:
-        await ctx.send(f"Bot lacks permissions to join {channel.name}!")
-    except discord.HTTPException as e:
-        await ctx.send(f"Connection error: {e}")
+        success = await events._attempt_molda_connect(bot, channel_id, retry_count=3)
+        if success:
+            await ctx.send(f"✅ Successfully joined {channel.name} with auto-rejoin enabled!")
+        else:
+            await ctx.send(f"❌ Failed to join {channel.name} after retries. Channel may be unavailable or have connection issues.")
     except Exception as e:
-        await ctx.send(f"Failed to join channel: {type(e).__name__}: {e}")
+        await ctx.send(f"❌ Error: {type(e).__name__}: {e}")
 
 
 @bot.command(name="leave-channel-molda")
