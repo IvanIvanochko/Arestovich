@@ -55,8 +55,11 @@ async def on_ready(bot: commands.Bot):
             print(f"[BOT] Voice channel {VOICE_CHANNEL_ID} not found or is not a voice channel")
     
     # Auto-join molda channel if configured (with retry logic)
-    if MOLDA_CHANNEL_ID != 0:
-        await _attempt_molda_connect(bot, MOLDA_CHANNEL_ID, retry_count=3)
+    # NOTE: If MOLDA_CHANNEL_ID fails consistently, the channel may have Discord API issues
+    # Use !join-channel-molda command instead to manually attempt connection
+    # Disabled auto-join on startup to avoid spamming retries
+    # if MOLDA_CHANNEL_ID != 0:
+    #     await _attempt_molda_connect(bot, MOLDA_CHANNEL_ID, retry_count=3)
 
 
 async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count: int = 3):
@@ -85,13 +88,13 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
     # Retry with exponential backoff
     for attempt in range(retry_count):
         try:
-            print(f"[MOLDA] Connecting attempt {attempt + 1}/{retry_count}...")
+            print(f"[MOLDA] Connecting attempt {attempt + 1}/{retry_count} to {channel.name} (ID: {channel_id})...")
             await asyncio.sleep(0.5 + (attempt * 1.0))  # Exponential backoff: 0.5s, 1.5s, 2.5s
             
-            vc = await asyncio.wait_for(channel.connect(), timeout=10.0)
+            vc = await asyncio.wait_for(channel.connect(), timeout=15.0)
             voice_connections[guild_id] = vc
             molda_rejoin_targets[guild_id] = channel_id
-            print(f"[MOLDA] Successfully joined voice channel: {channel.name}")
+            print(f"[MOLDA] ✅ Successfully joined voice channel: {channel.name}")
             
             # Start hourly rejoin task if not already running
             if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
@@ -101,24 +104,28 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
             return True
             
         except asyncio.TimeoutError:
-            print(f"[MOLDA] Connection attempt {attempt + 1} timed out")
+            print(f"[MOLDA] Attempt {attempt + 1}/{retry_count}: Connection timed out (network/server delay)")
             if attempt == retry_count - 1:
-                print(f"[MOLDA] Failed to connect after {retry_count} attempts - timeout")
+                print(f"[MOLDA] ❌ All {retry_count} connection attempts failed - timeout. Channel may be experiencing connectivity issues.")
         except IndexError as e:
-            print(f"[MOLDA] Connection attempt {attempt + 1} failed - encryption handshake error")
+            print(f"[MOLDA] Attempt {attempt + 1}/{retry_count}: Encryption mode selection failed (Discord API issue)")
             if attempt == retry_count - 1:
-                print(f"[MOLDA] Failed after {retry_count} attempts - voice channel may not support this connection")
+                print(f"[MOLDA] ❌ All {retry_count} attempts failed - Discord is not providing encryption modes for this channel.")
+                print(f"[MOLDA] This may be a Discord server issue or the channel configuration. Try:")
+                print(f"[MOLDA]   1. Check if the channel has specific voice settings")
+                print(f"[MOLDA]   2. Test connecting manually through Discord client")
+                print(f"[MOLDA]   3. Try a different voice channel")
         except discord.Forbidden:
-            print(f"[MOLDA] Forbidden - bot lacks permissions")
+            print(f"[MOLDA] ❌ Forbidden - bot lacks permissions to join {channel.name}")
             return False
         except discord.HTTPException as e:
-            print(f"[MOLDA] Connection attempt {attempt + 1} failed - HTTP error: {e}")
+            print(f"[MOLDA] Attempt {attempt + 1}/{retry_count}: HTTP error - {e}")
             if attempt == retry_count - 1:
-                print(f"[MOLDA] Failed after {retry_count} attempts - connection error")
+                print(f"[MOLDA] ❌ All {retry_count} attempts failed - HTTP connection error")
         except Exception as e:
-            print(f"[MOLDA] Connection attempt {attempt + 1} failed - {type(e).__name__}: {e}")
+            print(f"[MOLDA] Attempt {attempt + 1}/{retry_count}: {type(e).__name__}: {e}")
             if attempt == retry_count - 1:
-                print(f"[MOLDA] Failed after {retry_count} attempts")
+                print(f"[MOLDA] ❌ All {retry_count} attempts failed")
     
     return False
 
