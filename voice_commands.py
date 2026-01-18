@@ -47,7 +47,6 @@ async def join_voice(ctx: commands.Context, bot: commands.Bot, channel_id: int):
     
     # Retry with exponential backoff
     retry_count = 3
-    last_error = None
     for attempt in range(retry_count):
         try:
             print(f"[VOICE] Join attempt {attempt + 1}/{retry_count}...")
@@ -59,40 +58,20 @@ async def join_voice(ctx: commands.Context, bot: commands.Bot, channel_id: int):
             return
             
         except asyncio.TimeoutError:
-            last_error = "timeout"
             if attempt == retry_count - 1:
-                await ctx.send(f"❌ Connection timed out after {retry_count} attempts. Server may be overloaded.")
-        except IndexError as e:
-            # Discord encryption mode error - try to check if bot actually joined anyway
-            last_error = "encryption"
-            print(f"[VOICE] IndexError during attempt {attempt + 1}: {e}")
-            # Give it a moment and check if bot is actually in channel
-            await asyncio.sleep(0.5)
-            guild = bot.get_guild(ctx.guild.id)
-            if guild and guild.me and guild.me.voice and guild.me.voice.channel:
-                print(f"[VOICE] Bot is in channel despite IndexError: {guild.me.voice.channel.name}")
-                # Create a dummy voice connection object to track state
-                try:
-                    # Try to get the actual connection from bot's voice client
-                    voice_client = discord.utils.get(bot.voice_clients, guild=guild)
-                    if voice_client:
-                        voice_connections[guild_id] = voice_client
-                        await ctx.send(f"✅ Joined {channel.name}! (Note: voice connection has compatibility issues but bot is in channel)")
-                        return
-                except:
-                    pass
-            
+                await ctx.send(f"❌ Connection timed out after {retry_count} attempts. Server may be overloaded or unreachable.")
+        except IndexError:
+            # This is a Discord API issue - the channel doesn't provide encryption modes
             if attempt == retry_count - 1:
-                await ctx.send(f"❌ Connection failed - Discord encryption handshake issue. This is a Discord API/channel configuration problem. The channel may not support bot voice connections. Try a different channel or contact your server admin.")
+                await ctx.send(f"❌ **Channel Configuration Issue**: Discord is not providing encryption modes for this channel. This is a server-side Discord problem, not a bot issue.\n\n**Solutions:**\n1. Try a different voice channel\n2. Check if this channel has special Discord settings\n3. Contact your server administrator about the channel configuration")
+                print(f"[VOICE] Channel {channel_id} has Discord encryption mode issue - cannot connect")
         except discord.Forbidden:
             await ctx.send(f"❌ Bot lacks permissions to join {channel.name}!")
             return
         except discord.HTTPException as e:
-            last_error = str(e)
             if attempt == retry_count - 1:
                 await ctx.send(f"❌ Connection error: {e}")
         except Exception as e:
-            last_error = str(e)
             if attempt == retry_count - 1:
                 await ctx.send(f"❌ Failed to join channel: {type(e).__name__}: {e}")
 
