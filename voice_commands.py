@@ -1,8 +1,13 @@
 import discord
 from discord.ext import commands
+from pathlib import Path
 
 
 voice_connections: dict[int, discord.VoiceClient] = {}
+
+# Default audio directory and file
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_JOIN_AUDIO = BASE_DIR / "Molda Voice" / "New_comers_molda.mp3"
 
 
 async def join_voice(ctx: commands.Context, bot: commands.Bot, channel_id: int):
@@ -42,3 +47,34 @@ async def leave_voice(ctx: commands.Context):
     await voice_connections[guild_id].disconnect()
     voice_connections.pop(guild_id, None)
     await ctx.send("Left the voice channel!")
+
+
+async def play_join(ctx: commands.Context, filename: str | None = None):
+    """Play a join audio file in the guild's connected voice channel.
+    `filename` is optional and should be the name of a file inside `Molda Voice`.
+    """
+    guild_id = ctx.guild.id
+
+    if guild_id not in voice_connections or voice_connections[guild_id] is None:
+        await ctx.send("I'm not in a voice channel!")
+        return
+
+    vc = voice_connections[guild_id]
+
+    if filename:
+        file_path = BASE_DIR / "Molda Voice" / filename
+    else:
+        file_path = DEFAULT_JOIN_AUDIO
+
+    if not file_path.exists():
+        await ctx.send(f"Audio file not found: {file_path.name}")
+        return
+
+    try:
+        if vc.is_playing():
+            vc.stop()
+        source = discord.FFmpegPCMAudio(str(file_path))
+        vc.play(source)
+        await ctx.send(f"Playing {file_path.name}")
+    except Exception as e:
+        await ctx.send(f"Failed to play audio: {e}")

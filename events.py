@@ -28,7 +28,8 @@ async def on_ready(bot: commands.Bot):
         if channel and isinstance(channel, discord.VoiceChannel):
             try:
                 for guild_id, vc in list(voice_connections.items()):
-                    if vc and not vc.is_closed():
+                    # VoiceClient may not have is_closed(); check connection by channel
+                    if vc and getattr(vc, "channel", None) is not None:
                         await vc.disconnect()
                         voice_connections.pop(guild_id, None)
                 
@@ -62,7 +63,8 @@ async def on_voice_state_update(
         if joined and not member.bot:
             guild_id = after.channel.guild.id
             vc = voice_connections.get(guild_id)
-            if vc and not vc.is_closed() and vc.channel and vc.channel.id == after.channel.id:
+            # Check active connection by channel presence
+            if vc and getattr(vc, "channel", None) is not None and vc.channel.id == after.channel.id:
                 if JOIN_AUDIO.exists():
                     try:
                         # stop current audio if playing

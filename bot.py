@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands
 
 from config import TOKEN, MONITORED_ROLE_ID
-from voice_commands import join_voice, leave_voice
+from voice_commands import join_voice, leave_voice, play_join
 import events
 
 intents = discord.Intents.default()
@@ -28,6 +28,13 @@ async def join_channel_cmd(ctx: commands.Context, channel_id: int):
 async def leave_channel_cmd(ctx: commands.Context):
     """Leave the current voice channel."""
     await leave_voice(ctx)
+
+
+@bot.command(name="play-join")
+@commands.has_permissions(administrator=True)
+async def play_join_cmd(ctx: commands.Context, filename: str = None):
+    """Play the configured join audio (admin only). Optionally specify filename in `Molda Voice/`."""
+    await play_join(ctx, filename)
 
 
 @bot.event
