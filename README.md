@@ -37,5 +37,5 @@
 
 ## Commands
 
-- `!join-channel <channel_id>` - Join a voice channel by ID
-- `!leave-channel` - Leave the current voice channel
+- `!join-channel <channel_id>` - Join a voice channel by ID (admin only)
+- `!leave-channel` - Leave the current voice channel (admin only)
