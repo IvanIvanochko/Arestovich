@@ -83,8 +83,11 @@ async def play_join(ctx: commands.Context, filename: str | None = None):
         if FFMPEG_EXEC is None:
             await ctx.send("ffmpeg not available on the server. Set FFMPEG_PATH or install ffmpeg.")
             return
-        source = discord.FFmpegPCMAudio(str(file_path), executable=FFMPEG_EXEC)
-        vc.play(source)
+        try:
+            source = discord.FFmpegOpusAudio.from_probe(str(file_path), executable=FFMPEG_EXEC)
+            vc.play(source)
+        except Exception as e:
+            await ctx.send(f"Failed to play audio (Opus probe failed): {e}")
         await ctx.send(f"Playing {file_path.name}")
     except Exception as e:
         await ctx.send(f"Failed to play audio: {e}")
