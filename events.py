@@ -90,6 +90,7 @@ async def on_voice_state_update(
                     return
                 # If a specific greeting token exists for this member, use it
                 greeting_filename = get_greeting_for_member(member.id)
+                print(f"[AUDIO] Checking greeting for member {member.id} ({member.name}): {greeting_filename}")
                 if greeting_filename:
                     audio_path = Path(__file__).resolve().parent / "Molda Voice" / greeting_filename
                     # Try .opus version first
