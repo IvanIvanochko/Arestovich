@@ -1,9 +1,17 @@
 import asyncio
+import os
 import discord
 from discord.ext import commands
+from pathlib import Path
+
 from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID
 from utils import has_role, find_recent_mute_actor
 from voice_commands import voice_connections
+
+# Path to the join audio file (relative to project)
+JOIN_AUDIO = Path(__file__).resolve().parent / "Molda Voice" / "New_comers_molda.mp3"
+if not JOIN_AUDIO.exists():
+    print(f"[AUDIO] Join audio not found at: {JOIN_AUDIO}")
 
 
 # Щоб не запускати кілька таймерів на одну людину
@@ -47,6 +55,28 @@ async def on_voice_state_update(
         f"deaf: {before.deaf} -> {after.deaf} | "
         f"self_deaf: {before.self_deaf} -> {after.self_deaf}"
     )
+
+    # Play join audio when a non-bot user enters a channel where the bot is connected
+    try:
+        joined = (before.channel is None) and (after.channel is not None)
+        if joined and not member.bot:
+            guild_id = after.channel.guild.id
+            vc = voice_connections.get(guild_id)
+            if vc and not vc.is_closed() and vc.channel and vc.channel.id == after.channel.id:
+                if JOIN_AUDIO.exists():
+                    try:
+                        # stop current audio if playing
+                        if vc.is_playing():
+                            vc.stop()
+                        source = discord.FFmpegPCMAudio(str(JOIN_AUDIO))
+                        vc.play(source)
+                        print(f"[AUDIO] Played join audio for {member} in {after.channel.name}")
+                    except Exception as e:
+                        print("[AUDIO] Failed to play join audio:", e)
+                else:
+                    print("[AUDIO] Join audio file not present; skipping playback.")
+    except Exception as e:
+        print("[AUDIO] Error during join-audio handling:", e)
 
     became_server_muted = (before.mute is False) and (after.mute is True)
     if not became_server_muted:
