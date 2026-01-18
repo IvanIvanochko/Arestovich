@@ -32,14 +32,18 @@ for name_key, filename in list(name_to_filename.items()):
             try:
                 member_id = int(val)
                 id_to_filename[member_id] = filename
+                print(f"[GREETINGS] Mapped {token}={member_id} -> {filename}")
                 found = True
                 break
             except ValueError:
                 # skip invalid env values
+                print(f"[GREETINGS] Invalid {token} value: {val}")
                 pass
     if not found:
         # no token set for this name; skip mapping but command will still be registered
-        pass
+        print(f"[GREETINGS] No token set for {name_key} (checked {candidates})")
+
+print(f"[GREETINGS] Final mappings: {id_to_filename}")
 
 
 def get_greeting_for_member(member_id: int) -> Optional[str]:
