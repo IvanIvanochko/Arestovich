@@ -54,53 +54,73 @@ async def on_ready(bot: commands.Bot):
         else:
             print(f"[BOT] Voice channel {VOICE_CHANNEL_ID} not found or is not a voice channel")
     
-    # Auto-join molda channel if configured
+    # Auto-join molda channel if configured (with retry logic)
     if MOLDA_CHANNEL_ID != 0:
-        channel = bot.get_channel(MOLDA_CHANNEL_ID)
-        if channel and isinstance(channel, discord.VoiceChannel):
-            try:
-                guild_id = channel.guild.id
-                
-                # Check bot permissions
-                perms = channel.permissions_for(channel.guild.me)
-                if not perms.connect:
-                    print(f"[MOLDA] Bot lacks CONNECT permission for channel {channel.name}")
-                    return
-                
-                # Disconnect from any existing connection in this guild
-                if guild_id in voice_connections and voice_connections[guild_id]:
-                    try:
-                        await voice_connections[guild_id].disconnect()
-                    except Exception as e:
-                        print(f"[MOLDA] Error disconnecting existing voice connection: {e}")
-                    voice_connections.pop(guild_id, None)
-                
-                # Add small delay to avoid rapid reconnection conflicts
-                await asyncio.sleep(0.5)
-                
-                vc = await channel.connect()
-                voice_connections[guild_id] = vc
-                molda_rejoin_targets[guild_id] = MOLDA_CHANNEL_ID
-                print(f"[MOLDA] Joined molda voice channel: {channel.name}")
-                
-                # Start hourly rejoin task if not already running
-                if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
-                    molda_rejoin_tasks[guild_id] = asyncio.create_task(
-                        _molda_hourly_rejoin_loop(bot, guild_id, MOLDA_CHANNEL_ID)
-                    )
-                    
-            except asyncio.TimeoutError:
-                print(f"[MOLDA] Timeout connecting to molda voice channel. Network issue or server overloaded.")
-            except IndexError as e:
-                print(f"[MOLDA] Voice handshake failed - encryption mode not provided. Channel may be unavailable: {e}")
-            except discord.Forbidden:
-                print(f"[MOLDA] Forbidden - bot lacks permissions to join molda channel {MOLDA_CHANNEL_ID}")
-            except discord.HTTPException as e:
-                print(f"[MOLDA] HTTP exception connecting to molda voice channel: {e}")
-            except Exception as e:
-                print(f"[MOLDA] Failed to join molda voice channel: {type(e).__name__}: {e}")
-        else:
-            print(f"[MOLDA] Molda voice channel {MOLDA_CHANNEL_ID} not found or is not a voice channel")
+        await _attempt_molda_connect(bot, MOLDA_CHANNEL_ID, retry_count=3)
+
+
+async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count: int = 3):
+    """Attempt to connect to molda channel with retry logic."""
+    channel = bot.get_channel(channel_id)
+    if not channel or not isinstance(channel, discord.VoiceChannel):
+        print(f"[MOLDA] Channel {channel_id} not found or not a voice channel")
+        return False
+    
+    guild_id = channel.guild.id
+    
+    # Check bot permissions
+    perms = channel.permissions_for(channel.guild.me)
+    if not perms.connect:
+        print(f"[MOLDA] Bot lacks CONNECT permission for channel {channel.name}")
+        return False
+    
+    # Disconnect from any existing connection in this guild
+    if guild_id in voice_connections and voice_connections[guild_id]:
+        try:
+            await voice_connections[guild_id].disconnect()
+        except Exception as e:
+            print(f"[MOLDA] Error disconnecting existing voice connection: {e}")
+        voice_connections.pop(guild_id, None)
+    
+    # Retry with exponential backoff
+    for attempt in range(retry_count):
+        try:
+            print(f"[MOLDA] Connecting attempt {attempt + 1}/{retry_count}...")
+            await asyncio.sleep(0.5 + (attempt * 1.0))  # Exponential backoff: 0.5s, 1.5s, 2.5s
+            
+            vc = await asyncio.wait_for(channel.connect(), timeout=10.0)
+            voice_connections[guild_id] = vc
+            molda_rejoin_targets[guild_id] = channel_id
+            print(f"[MOLDA] Successfully joined voice channel: {channel.name}")
+            
+            # Start hourly rejoin task if not already running
+            if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
+                molda_rejoin_tasks[guild_id] = asyncio.create_task(
+                    _molda_hourly_rejoin_loop(bot, guild_id, channel_id)
+                )
+            return True
+            
+        except asyncio.TimeoutError:
+            print(f"[MOLDA] Connection attempt {attempt + 1} timed out")
+            if attempt == retry_count - 1:
+                print(f"[MOLDA] Failed to connect after {retry_count} attempts - timeout")
+        except IndexError as e:
+            print(f"[MOLDA] Connection attempt {attempt + 1} failed - encryption handshake error")
+            if attempt == retry_count - 1:
+                print(f"[MOLDA] Failed after {retry_count} attempts - voice channel may not support this connection")
+        except discord.Forbidden:
+            print(f"[MOLDA] Forbidden - bot lacks permissions")
+            return False
+        except discord.HTTPException as e:
+            print(f"[MOLDA] Connection attempt {attempt + 1} failed - HTTP error: {e}")
+            if attempt == retry_count - 1:
+                print(f"[MOLDA] Failed after {retry_count} attempts - connection error")
+        except Exception as e:
+            print(f"[MOLDA] Connection attempt {attempt + 1} failed - {type(e).__name__}: {e}")
+            if attempt == retry_count - 1:
+                print(f"[MOLDA] Failed after {retry_count} attempts")
+    
+    return False
 
 
 async def _molda_hourly_rejoin_loop(bot: commands.Bot, guild_id: int, channel_id: int):
@@ -121,38 +141,20 @@ async def _molda_hourly_rejoin_loop(bot: commands.Bot, guild_id: int, channel_id
             
             vc = voice_connections.get(guild_id)
             if not vc or getattr(vc, "channel", None) is None:
-                # Bot is not in a channel, try to rejoin
-                try:
-                    # Check permissions first
-                    perms = channel.permissions_for(channel.guild.me)
-                    if not perms.connect:
-                        print(f"[MOLDA] Bot lacks CONNECT permission, cannot rejoin")
-                        continue
-                    
-                    vc = await channel.connect()
-                    voice_connections[guild_id] = vc
-                    print(f"[MOLDA] Rejoined channel after 1 hour: {channel.name}")
-                except asyncio.TimeoutError:
-                    print(f"[MOLDA] Timeout rejoining after 1 hour")
-                except IndexError as e:
-                    print(f"[MOLDA] Voice handshake failed during rejoin - encryption mode not provided")
-                except discord.Forbidden:
-                    print(f"[MOLDA] Forbidden - bot lacks permissions to rejoin")
-                except discord.HTTPException as e:
-                    print(f"[MOLDA] HTTP error during rejoin: {e}")
-                except Exception as e:
-                    print(f"[MOLDA] Failed to rejoin after 1 hour: {type(e).__name__}: {e}")
+                # Bot is not in a channel, try to rejoin with retry
+                print(f"[MOLDA] Hourly rejoin: Bot not in channel, attempting to rejoin...")
+                await _attempt_molda_connect(bot, channel_id, retry_count=2)
             else:
                 # Bot is in a channel, verify it's the correct one
                 if vc.channel.id != channel_id:
                     # Bot is in wrong channel, move back
                     try:
                         await vc.move_to(channel)
-                        print(f"[MOLDA] Moved back to molda channel: {channel.name}")
+                        print(f"[MOLDA] Hourly check: Moved back to correct molda channel")
                     except Exception as e:
-                        print(f"[MOLDA] Failed to move back to molda channel: {e}")
+                        print(f"[MOLDA] Failed to move back during hourly check: {type(e).__name__}: {e}")
                 else:
-                    print(f"[MOLDA] Still in correct molda channel, nothing to do")
+                    print(f"[MOLDA] Hourly check: Still in correct molda channel")
                     
         except asyncio.CancelledError:
             print(f"[MOLDA] Rejoin loop for guild {guild_id} cancelled")
