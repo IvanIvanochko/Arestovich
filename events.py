@@ -7,6 +7,12 @@ from pathlib import Path
 from config import MONITORED_ROLE_ID, VOICE_CHANNEL_ID
 from utils import has_role, find_recent_mute_actor
 from voice_commands import voice_connections
+from ffmpeg_helper import get_ffmpeg_exec
+
+# Resolve ffmpeg executable for event playback
+FFMPEG_EXEC = get_ffmpeg_exec()
+if not FFMPEG_EXEC:
+    print("[FFMPEG] ffmpeg executable not found. Set FFMPEG_PATH env var or ensure ffmpeg is available.")
 
 # Path to the join audio file (relative to project)
 JOIN_AUDIO = Path(__file__).resolve().parent / "Molda Voice" / "New_comers_molda.mp3"
@@ -70,8 +76,11 @@ async def on_voice_state_update(
                         # stop current audio if playing
                         if vc.is_playing():
                             vc.stop()
-                        source = discord.FFmpegPCMAudio(str(JOIN_AUDIO))
-                        vc.play(source)
+                        if FFMPEG_EXEC is None:
+                            print("[AUDIO] ffmpeg not available; cannot play audio.")
+                        else:
+                            source = discord.FFmpegPCMAudio(str(JOIN_AUDIO), executable=FFMPEG_EXEC)
+                            vc.play(source)
                         print(f"[AUDIO] Played join audio for {member} in {after.channel.name}")
                     except Exception as e:
                         print("[AUDIO] Failed to play join audio:", e)
