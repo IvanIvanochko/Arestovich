@@ -80,7 +80,7 @@ async def on_voice_state_update(
                             print("[AUDIO] ffmpeg not available; cannot play audio.")
                         else:
                             try:
-                                source = discord.FFmpegOpusAudio.from_probe(str(JOIN_AUDIO), executable=FFMPEG_EXEC)
+                                source = await discord.FFmpegOpusAudio.from_probe(str(JOIN_AUDIO), executable=FFMPEG_EXEC)
                                 vc.play(source)
                             except Exception as e:
                                 print("[AUDIO] Failed to play join audio (Opus probe):", e)
