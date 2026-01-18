@@ -109,27 +109,13 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
                 print(f"[MOLDA] ❌ All {retry_count} connection attempts failed - timeout. Channel may be experiencing connectivity issues.")
         except IndexError as e:
             print(f"[MOLDA] Attempt {attempt + 1}/{retry_count}: Encryption mode selection failed (Discord API issue)")
-            # Check if bot actually joined despite the error
-            guild = bot.get_guild(guild_id)
-            if guild and guild.me and guild.me.voice and guild.me.voice.channel:
-                print(f"[MOLDA] Bot is in channel despite IndexError: {guild.me.voice.channel.name}")
-                voice_client = discord.utils.get(bot.voice_clients, guild=guild)
-                if voice_client:
-                    voice_connections[guild_id] = voice_client
-                    molda_rejoin_targets[guild_id] = channel_id
-                    print(f"[MOLDA] ✅ Connection established despite encryption handshake warning")
-                    if guild_id not in molda_rejoin_tasks or molda_rejoin_tasks[guild_id].done():
-                        molda_rejoin_tasks[guild_id] = asyncio.create_task(
-                            _molda_hourly_rejoin_loop(bot, guild_id, channel_id)
-                        )
-                    return True
-            
             if attempt == retry_count - 1:
                 print(f"[MOLDA] ❌ All {retry_count} attempts failed - Discord is not providing encryption modes for this channel.")
-                print(f"[MOLDA] This may be a Discord server issue or the channel configuration. Try:")
-                print(f"[MOLDA]   1. Check if the channel has specific voice settings")
-                print(f"[MOLDA]   2. Test connecting manually through Discord client")
-                print(f"[MOLDA]   3. Try a different voice channel")
+                print(f"[MOLDA] This is a Discord server configuration issue. The channel cannot be used with bot voice connections.")
+                print(f"[MOLDA] Recommended actions:")
+                print(f"[MOLDA]   1. Try joining a different voice channel")
+                print(f"[MOLDA]   2. Check if this channel has special Discord settings or permissions")
+                print(f"[MOLDA]   3. Contact your server administrator about the channel configuration")
         except discord.Forbidden:
             print(f"[MOLDA] ❌ Forbidden - bot lacks permissions to join {channel.name}")
             return False
