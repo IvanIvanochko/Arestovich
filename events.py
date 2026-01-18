@@ -92,8 +92,16 @@ async def on_voice_state_update(
                 greeting_filename = get_greeting_for_member(member.id)
                 if greeting_filename:
                     audio_path = Path(__file__).resolve().parent / "Molda Voice" / greeting_filename
+                    # Try .opus version first
+                    opus_path = audio_path.with_suffix('.opus')
+                    if opus_path.exists():
+                        audio_path = opus_path
                 else:
                     audio_path = JOIN_AUDIO
+                    # Try .opus version first
+                    opus_audio = JOIN_AUDIO.with_suffix('.opus')
+                    if opus_audio.exists():
+                        audio_path = opus_audio
 
                 if audio_path.exists():
                     try:
