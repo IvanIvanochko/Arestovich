@@ -63,6 +63,9 @@ async def on_voice_state_update(
         f"self_deaf: {before.self_deaf} -> {after.self_deaf}"
     )
 
+    # Guild reference (used by join-audio logic and audit checks)
+    guild = member.guild
+
     # Play join audio when a non-bot user enters a channel where the bot is connected
     try:
         joined = (before.channel is None) and (after.channel is not None)
