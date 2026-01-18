@@ -66,5 +66,3 @@ def register_greeting_commands(bot):
 
         # Add the command to the bot
         bot.add_command(commands.Command(_cmd, name=cmd_name))
-
-*** End of file
