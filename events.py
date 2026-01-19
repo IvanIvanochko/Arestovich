@@ -16,7 +16,7 @@ if not FFMPEG_EXEC:
     print("[FFMPEG] ffmpeg executable not found. Set FFMPEG_PATH env var or ensure ffmpeg is available.")
 
 # Path to the join audio file (relative to project)
-JOIN_AUDIO = Path(__file__).resolve().parent / "Molda Voice" / "New_comers_molda.mp3"
+JOIN_AUDIO = Path(__file__).resolve().parent / "Molda Voice" / "greetings" / "New_comers_molda.mp3"
 if not JOIN_AUDIO.exists():
     print(f"[AUDIO] Join audio not found at: {JOIN_AUDIO}")
 
@@ -292,7 +292,7 @@ async def on_voice_state_update(
                 greeting_filename = get_greeting_for_member(member.id)
                 print(f"[AUDIO] Checking greeting for member {member.id} ({member.name}): {greeting_filename}")
                 if greeting_filename:
-                    audio_path = Path(__file__).resolve().parent / "Molda Voice" / greeting_filename
+                    audio_path = Path(__file__).resolve().parent / "Molda Voice" / "greetings" / greeting_filename
                     # Try .opus version first
                     opus_path = audio_path.with_suffix('.opus')
                     if opus_path.exists():

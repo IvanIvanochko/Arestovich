@@ -3,7 +3,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
-AUDIO_DIR = Path(__file__).resolve().parent / "Molda Voice"
+AUDIO_DIR = Path(__file__).resolve().parent / "Molda Voice" / "greetings"
 
 
 async def encode_mp3_to_opus(

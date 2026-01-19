@@ -5,7 +5,7 @@ from typing import Dict, Optional
 
 from voice_commands import play_join
 
-AUDIO_DIR = Path(__file__).resolve().parent / "Molda Voice"
+AUDIO_DIR = Path(__file__).resolve().parent / "Molda Voice" / "greetings"
 _pattern = re.compile(r"(?P<name>[^_/\\]+)_Molda\.(mp3|opus)$", re.IGNORECASE)
 
 # name (lowercase) -> filename (basename)

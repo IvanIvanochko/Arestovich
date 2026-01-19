@@ -10,7 +10,7 @@ voice_connections: dict[int, discord.VoiceClient] = {}
 
 # Default audio directory and file
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_JOIN_AUDIO = BASE_DIR / "Molda Voice" / "New_comers_molda.mp3"
+DEFAULT_JOIN_AUDIO = BASE_DIR / "Molda Voice" / "greetings" / "New_comers_molda.mp3"
 
 # Resolve ffmpeg executable once at import
 FFMPEG_EXEC = get_ffmpeg_exec()
@@ -88,7 +88,7 @@ async def play_join(ctx: commands.Context, filename: str | None = None):
         return
 
     if filename:
-        file_path = BASE_DIR / "Molda Voice" / filename
+        file_path = BASE_DIR / "Molda Voice" / "greetings" / filename
         # For explicit filenames, don't convert - use as-is
     else:
         file_path = DEFAULT_JOIN_AUDIO

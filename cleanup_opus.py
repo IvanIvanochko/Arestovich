@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-audio_dir = Path(__file__).resolve().parent / "Molda Voice"
+audio_dir = Path(__file__).resolve().parent / "Molda Voice" / "greetings"
 opus_files = list(audio_dir.glob("*.opus"))
 
 if not opus_files:
