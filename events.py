@@ -29,22 +29,42 @@ async def on_ready(bot: commands.Bot):
     print(f"Logged in as {bot.user} (id={bot.user.id})")
     print(f"Monitored role id: {MONITORED_ROLE_ID}")
     
-    # Auto-join the specific voice channel
+    # Auto-join the specific voice channel with retry logic
     if VOICE_CHANNEL_ID != 0:
         channel = bot.get_channel(VOICE_CHANNEL_ID)
         if channel and isinstance(channel, discord.VoiceChannel):
             try:
+                # Disconnect any existing connections
                 for guild_id, vc in list(voice_connections.items()):
-                    # VoiceClient may not have is_closed(); check connection by channel
                     if vc and getattr(vc, "channel", None) is not None:
-                        await vc.disconnect()
+                        try:
+                            await vc.disconnect(force=True)
+                        except Exception as e:
+                            print(f"[BOT] Error disconnecting from {guild_id}: {e}")
                         voice_connections.pop(guild_id, None)
                 
-                vc = await channel.connect()
-                voice_connections[channel.guild.id] = vc
-                print(f"[BOT] Joined voice channel: {channel.name}")
+                # Connect with retry logic
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        vc = await asyncio.wait_for(channel.connect(reconnect=True), timeout=10)
+                        voice_connections[channel.guild.id] = vc
+                        print(f"[BOT] Joined voice channel: {channel.name}")
+                        break
+                    except asyncio.TimeoutError:
+                        print(f"[BOT] Connection timeout (attempt {attempt + 1}/{max_retries})")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    except discord.errors.ConnectionClosed as e:
+                        print(f"[BOT] Connection closed with code {e.code} (attempt {attempt + 1}/{max_retries})")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(2 ** attempt)
+                    except Exception as e:
+                        print(f"[BOT] Failed to join voice channel (attempt {attempt + 1}/{max_retries}): {e}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(2 ** attempt)
             except Exception as e:
-                print(f"[BOT] Failed to join voice channel: {e}")
+                print(f"[BOT] Unexpected error during voice connection: {e}")
         else:
             print(f"[BOT] Voice channel {VOICE_CHANNEL_ID} not found or is not a voice channel")
 
@@ -88,6 +108,12 @@ async def on_voice_state_update(
                 if current_member.voice.channel.id != after.channel.id:
                     print(f"[AUDIO] Member {member} moved channels after delay; skipping playback.")
                     return
+                
+                # Verify voice client is still active
+                if not vc or not getattr(vc, "channel", None):
+                    print(f"[AUDIO] Voice connection lost; skipping playback.")
+                    return
+                    
                 # If a specific greeting token exists for this member, use it
                 greeting_filename = get_greeting_for_member(member.id)
                 print(f"[AUDIO] Checking greeting for member {member.id} ({member.name}): {greeting_filename}")

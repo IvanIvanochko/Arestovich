@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from pathlib import Path
+import asyncio
 
 from ffmpeg_helper import get_ffmpeg_exec
 
@@ -33,12 +34,20 @@ async def join_voice(ctx: commands.Context, bot: commands.Bot, channel_id: int):
     
     # Disconnect from existing connection if any
     if guild_id in voice_connections:
-        await voice_connections[guild_id].disconnect()
+        try:
+            await voice_connections[guild_id].disconnect(force=True)
+        except Exception as e:
+            print(f"[VOICE] Error disconnecting: {e}")
     
     try:
-        vc = await channel.connect()
+        # Try to connect with timeout and reconnect enabled
+        vc = await asyncio.wait_for(channel.connect(reconnect=True), timeout=10)
         voice_connections[guild_id] = vc
         await ctx.send(f"Joined {channel.name}!")
+    except asyncio.TimeoutError:
+        await ctx.send(f"Connection timeout. Check your network and try again.")
+    except discord.errors.ConnectionClosed as e:
+        await ctx.send(f"Connection closed with code {e.code}. Try again later.")
     except Exception as e:
         await ctx.send(f"Failed to join channel: {e}")
 
@@ -51,8 +60,12 @@ async def leave_voice(ctx: commands.Context):
         await ctx.send("I'm not in a voice channel!")
         return
     
-    await voice_connections[guild_id].disconnect()
-    voice_connections.pop(guild_id, None)
+    try:
+        await voice_connections[guild_id].disconnect(force=True)
+    except Exception as e:
+        print(f"[VOICE] Error disconnecting: {e}")
+    finally:
+        voice_connections.pop(guild_id, None)
     await ctx.send("Left the voice channel!")
 
 
@@ -67,6 +80,12 @@ async def play_join(ctx: commands.Context, filename: str | None = None):
         return
 
     vc = voice_connections[guild_id]
+    
+    # Check if voice client is still connected
+    if not vc or not getattr(vc, "channel", None):
+        await ctx.send("Voice connection lost!")
+        voice_connections.pop(guild_id, None)
+        return
 
     if filename:
         file_path = BASE_DIR / "Molda Voice" / filename

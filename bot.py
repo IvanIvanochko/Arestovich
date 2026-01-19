@@ -3,6 +3,7 @@
 
 import discord
 from discord.ext import commands
+import asyncio
 
 from config import TOKEN, MONITORED_ROLE_ID
 from voice_commands import join_voice, leave_voice, play_join
@@ -69,6 +70,14 @@ async def on_voice_state_update(
     after: discord.VoiceState
 ):
     await events.on_voice_state_update(member, before, after)
+
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    """Handle errors and log them properly."""
+    import traceback
+    print(f"[ERROR] Event '{event}' raised an exception:")
+    traceback.print_exc()
 
 
 def main():
