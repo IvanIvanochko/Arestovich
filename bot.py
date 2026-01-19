@@ -6,6 +6,7 @@ from discord.ext import commands
 import asyncio
 
 from config import TOKEN, MONITORED_ROLE_ID
+from config import TOKEN, MONITORED_ROLE_ID, MOLDA_CHANNEL_ID
 from voice_commands import join_voice, leave_voice, play_join
 import events
 from events import molda_rejoin_targets, molda_rejoin_tasks
@@ -40,8 +41,18 @@ async def leave_channel_cmd(ctx: commands.Context):
 
 @bot.command(name="join-channel-molda")
 @commands.has_permissions(administrator=True)
-async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int):
-    """Join the molda voice channel with auto-rejoin enabled. Usage: !join-channel-molda <channel_id>"""
+async def join_channel_molda_cmd(ctx: commands.Context, channel_id: int | None = None):
+    """Join the molda voice channel with auto-rejoin enabled. 
+    Usage: !join-channel-molda [channel_id]
+    If no channel_id provided, uses MOLDA_CHANNEL_ID from .env
+    """
+    # Use provided channel_id or fall back to config
+    if channel_id is None:
+        if MOLDA_CHANNEL_ID == 0:
+            await ctx.send("❌ No channel ID provided and MOLDA_CHANNEL_ID not set in .env")
+            return
+        channel_id = MOLDA_CHANNEL_ID
+    
     channel = bot.get_channel(channel_id)
     
     if channel is None:
