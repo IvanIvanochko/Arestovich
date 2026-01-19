@@ -1,0 +1,6 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacks]
+packages = ["opus"]
+python = "3.11"

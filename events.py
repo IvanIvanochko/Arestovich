@@ -100,7 +100,7 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
     # Disconnect from any existing connection in this guild
     if guild_id in voice_connections and voice_connections[guild_id]:
         try:
-            await voice_connections[guild_id].disconnect()
+            await voice_connections[guild_id].disconnect(force=True)
         except Exception as e:
             print(f"[MOLDA] Error disconnecting existing voice connection: {e}")
         voice_connections.pop(guild_id, None)
@@ -111,7 +111,7 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
             print(f"[MOLDA] Connecting attempt {attempt + 1}/{retry_count} to {channel.name} (ID: {channel_id})...")
             await asyncio.sleep(0.5 + (attempt * 1.0))  # Exponential backoff: 0.5s, 1.5s, 2.5s
             
-            vc = await asyncio.wait_for(channel.connect(), timeout=15.0)
+            vc = await asyncio.wait_for(channel.connect(reconnect=True), timeout=15.0)
             voice_connections[guild_id] = vc
             molda_rejoin_targets[guild_id] = channel_id
             print(f"[MOLDA] ✅ Successfully joined voice channel: {channel.name}")
@@ -136,6 +136,15 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
                 print(f"[MOLDA]   1. Try joining a different voice channel")
                 print(f"[MOLDA]   2. Check if this channel has special Discord settings or permissions")
                 print(f"[MOLDA]   3. Contact your server administrator about the channel configuration")
+        except discord.errors.ConnectionClosed as e:
+            print(f"[MOLDA] Attempt {attempt + 1}/{retry_count}: WebSocket closed with code {e.code} - {e.shard_id}")
+            if e.code == 4006:
+                print(f"[MOLDA] ERROR 4006 detected - This is an encryption/media issue. Retrying...")
+                if attempt < retry_count - 1:
+                    await asyncio.sleep(1.0)  # Extra delay before retry
+                    continue
+            if attempt == retry_count - 1:
+                print(f"[MOLDA] ❌ All {retry_count} attempts failed with WebSocket error {e.code}")
         except discord.Forbidden:
             print(f"[MOLDA] ❌ Forbidden - bot lacks permissions to join {channel.name}")
             return False
@@ -148,6 +157,7 @@ async def _attempt_molda_connect(bot: commands.Bot, channel_id: int, retry_count
             if attempt == retry_count - 1:
                 print(f"[MOLDA] ❌ All {retry_count} attempts failed")
     
+    return False
     return False
 
 
