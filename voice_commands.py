@@ -89,17 +89,9 @@ async def play_join(ctx: commands.Context, filename: str | None = None):
 
     if filename:
         file_path = BASE_DIR / "Molda Voice" / filename
-        # Try .opus version first if filename is .mp3
-        if file_path.suffix.lower() == '.mp3':
-            opus_path = file_path.with_suffix('.opus')
-            if opus_path.exists():
-                file_path = opus_path
+        # For explicit filenames, don't convert - use as-is
     else:
         file_path = DEFAULT_JOIN_AUDIO
-        # Try .opus version first
-        opus_default = DEFAULT_JOIN_AUDIO.with_suffix('.opus')
-        if opus_default.exists():
-            file_path = opus_default
 
     if not file_path.exists():
         await ctx.send(f"Audio file not found: {file_path.name}")

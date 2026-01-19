@@ -28,7 +28,11 @@ async def encode_mp3_to_opus(
         ffmpeg_exec or "ffmpeg",
         "-i", str(mp3_file),
         "-c:a", "libopus",
-        "-b:a", "64k",  # Lower bitrate to save memory
+        "-vn",  # No video
+        "-ar", "48000",  # Discord requires 48kHz
+        "-ac", "2",  # Stereo
+        "-b:a", "128k",  # Proper bitrate
+        "-application", "voip",  # Optimize for voice
         "-y",
         str(opus_file)
     ]
