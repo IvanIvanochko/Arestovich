@@ -7,7 +7,7 @@ import asyncio
 
 from config import TOKEN, MONITORED_ROLE_ID
 from config import TOKEN, MONITORED_ROLE_ID, MOLDA_CHANNEL_ID
-from voice_commands import join_voice, leave_voice, play_join
+from voice_commands import join_voice, leave_voice, play_join, stop_audio
 import events
 from events import molda_rejoin_targets, molda_rejoin_tasks
 from greetings import register_greeting_commands
@@ -115,6 +115,13 @@ async def leave_channel_molda_cmd(ctx: commands.Context):
 async def play_join_cmd(ctx: commands.Context, filename: str = None):
     """Play the configured join audio (admin only). Optionally specify filename in `Molda Voice/`.""" 
     await play_join(ctx, filename)
+
+
+@bot.command(name="current-audio-stop")
+@commands.has_permissions(administrator=True)
+async def stop_audio_cmd(ctx: commands.Context):
+    """Stop the current audio playback (admin only)."""
+    await stop_audio(ctx)
 
 
 @bot.command(name="encode-audio")

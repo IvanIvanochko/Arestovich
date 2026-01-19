@@ -111,3 +111,26 @@ async def play_join(ctx: commands.Context, filename: str | None = None):
             await ctx.send(f"Failed to play audio: {e}")
     except Exception as e:
         await ctx.send(f"Failed to play audio: {e}")
+
+
+async def stop_audio(ctx: commands.Context):
+    """Stop the current audio playback."""
+    guild_id = ctx.guild.id
+
+    if guild_id not in voice_connections or voice_connections[guild_id] is None:
+        await ctx.send("I'm not in a voice channel!")
+        return
+
+    vc = voice_connections[guild_id]
+    
+    # Check if voice client is still connected
+    if not vc or not getattr(vc, "channel", None):
+        await ctx.send("Voice connection lost!")
+        voice_connections.pop(guild_id, None)
+        return
+
+    if vc.is_playing():
+        vc.stop()
+        await ctx.send("⏹️ Audio stopped!")
+    else:
+        await ctx.send("❌ No audio currently playing")

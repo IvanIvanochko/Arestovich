@@ -69,7 +69,7 @@ async def encode_all_mp3s(ffmpeg_exec: Optional[str] = None) -> None:
 
     mp3_files = list(AUDIO_DIR.glob("*.mp3"))
     if not mp3_files:
-        print("[OPUS] No MP3 files found to encode")
+        # Silently skip if no MP3 files (they may already be encoded)
         return
 
     print(f"[OPUS] Found {len(mp3_files)} MP3 files. Starting encoding...")

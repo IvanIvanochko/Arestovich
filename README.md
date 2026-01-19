@@ -75,6 +75,7 @@
 
 ### Audio Playback
 - `!play-join [filename]` - Play audio file from `Molda Voice/` folder
+- `!current-audio-stop` - Stop current audio playback
 - `!encode-audio` - Pre-encode all MP3s to Opus format for efficiency
 
 ### Greeting Commands (Dynamic)
